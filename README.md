@@ -1,4 +1,3 @@
-Of course\! Here is the README file formatted with proper Markdown for better readability.
 
 # 🧾 Simple Invoice Generator
 
