@@ -37,7 +37,7 @@ class InvoiceApp(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("Simple Invoice Generator")
-        self.geometry("1200x700")
+        self.geometry("1200x750")
         self.minsize(950, 600) # Set a minimum size for the window
         self.configure(bg="#f0f0f0")
 
@@ -51,25 +51,25 @@ class InvoiceApp(tk.Tk):
         
         self.item_rows = []
         self.last_pdf_path = None # To store the path of the last generated PDF
+        self.discount_percent_var = tk.StringVar(value='0') # Global Discount Variable
+        
         self._create_widgets()
         self.add_item_row() # Start with one empty item row
+        
+        # NEW BINDING: Trigger recalculation when global discount changes
+        self.discount_percent_var.trace_add("write", lambda *args: self.update_totals())
 
     def _create_widgets(self):
         """Creates and places all the widgets in the main window."""
         main_frame = ttk.Frame(self, padding="10")
         main_frame.pack(fill=tk.BOTH, expand=True)
-        # Make the main frame's columns and rows responsive
-        main_frame.rowconfigure(1, weight=1) # The items frame should expand vertically
-        main_frame.columnconfigure(0, weight=1) # The single column should expand horizontally
+        main_frame.rowconfigure(1, weight=1) 
+        main_frame.columnconfigure(0, weight=1) 
 
         # --- Header Section (Doctor Name, Date) ---
         header_frame = ttk.Frame(main_frame)
         header_frame.grid(row=0, column=0, sticky="ew", pady=5)
         
-        # FIX: Replace DateEntry with a standard Entry and a Button to trigger a custom calendar popup.
-        # This gives us full control over the popup's position to prevent clipping.
-        
-        # Pack date elements to the RIGHT first to reserve their space.
         self.date_button = ttk.Button(header_frame, text="📅", command=self._open_calendar, width=3)
         self.date_button.pack(side=tk.RIGHT, padx=(0, 5))
 
@@ -79,7 +79,6 @@ class InvoiceApp(tk.Tk):
         
         ttk.Label(header_frame, text="Date:", font=("Helvetica", 11, "bold")).pack(side=tk.RIGHT, padx=(20, 5))
 
-        # Pack doctor name elements to the LEFT, allowing the entry to expand and fill space.
         ttk.Label(header_frame, text="Doctor's Name:", font=("Helvetica", 11, "bold")).pack(side=tk.LEFT, padx=5)
         self.doctor_name_entry = ttk.Entry(header_frame, width=40)
         self.doctor_name_entry.pack(side=tk.LEFT, padx=5, fill=tk.X, expand=True)
@@ -107,13 +106,17 @@ class InvoiceApp(tk.Tk):
         
         self._create_item_headers()
 
-        # --- Footer Section (Totals and Buttons) ---
+        # --- Footer Section (Global Discount, Totals and Buttons) ---
         footer_frame = ttk.Frame(main_frame)
         footer_frame.grid(row=2, column=0, sticky="ew", pady=10)
 
-        # Action Buttons
-        button_frame = ttk.Frame(footer_frame)
-        button_frame.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        # Left Side - Action Buttons & GLOBAL DISCOUNT
+        left_footer_frame = ttk.Frame(footer_frame)
+        left_footer_frame.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=5)
+        
+        # 1. Action Buttons
+        button_frame = ttk.Frame(left_footer_frame)
+        button_frame.pack(fill=tk.X, pady=(0, 10))
         
         self.add_item_btn = ttk.Button(button_frame, text="Add Item", command=self.add_item_row)
         self.add_item_btn.pack(side=tk.LEFT, padx=5)
@@ -121,27 +124,45 @@ class InvoiceApp(tk.Tk):
         self.remove_item_btn = ttk.Button(button_frame, text="Remove Last Item", command=self.remove_last_item_row)
         self.remove_item_btn.pack(side=tk.LEFT, padx=5)
         
-        # Totals Display
+        # 2. Global Discount Input (Bottom Left)
+        discount_input_frame = ttk.Frame(left_footer_frame)
+        discount_input_frame.pack(fill=tk.X, anchor='w')
+        
+        ttk.Label(discount_input_frame, text="Global Discount (%):", font=("Helvetica", 11, "bold")).pack(side=tk.LEFT, padx=5)
+        self.discount_entry = ttk.Entry(discount_input_frame, textvariable=self.discount_percent_var, width=10, justify='right')
+        self.discount_entry.pack(side=tk.LEFT, padx=5)
+
+
+        # Right Side - Totals Display
         totals_frame = ttk.Frame(footer_frame)
         totals_frame.pack(side=tk.RIGHT)
 
-        ttk.Label(totals_frame, text="Total Amount (Excl. GST):", font=("Helvetica", 10, "bold")).grid(row=0, column=0, sticky="e", padx=5)
-        self.total_excl_gst_label = ttk.Label(totals_frame, text="0.00", font=("Helvetica", 10))
-        self.total_excl_gst_label.grid(row=0, column=1, sticky="w", padx=5)
+        ttk.Label(totals_frame, text="Subtotal (Excl. Disc/GST):", font=("Helvetica", 10, "bold")).grid(row=0, column=0, sticky="e", padx=5)
+        self.subtotal_label = ttk.Label(totals_frame, text="0.00", font=("Helvetica", 10))
+        self.subtotal_label.grid(row=0, column=1, sticky="w", padx=5)
         
-        ttk.Label(totals_frame, text="Total GST Amount:", font=("Helvetica", 10, "bold")).grid(row=1, column=0, sticky="e", padx=5)
+        # Discount Label
+        ttk.Label(totals_frame, text="Discount Amount:", font=("Helvetica", 10, "bold")).grid(row=1, column=0, sticky="e", padx=5)
+        self.total_discount_label = ttk.Label(totals_frame, text="0.00", font=("Helvetica", 10))
+        self.total_discount_label.grid(row=1, column=1, sticky="w", padx=5)
+        
+        # Taxable Amount
+        ttk.Label(totals_frame, text="Taxable Amount:", font=("Helvetica", 10, "bold")).grid(row=2, column=0, sticky="e", padx=5)
+        self.total_excl_gst_label = ttk.Label(totals_frame, text="0.00", font=("Helvetica", 10))
+        self.total_excl_gst_label.grid(row=2, column=1, sticky="w", padx=5)
+        
+        ttk.Label(totals_frame, text="Total GST Amount:", font=("Helvetica", 10, "bold")).grid(row=3, column=0, sticky="e", padx=5)
         self.total_gst_label = ttk.Label(totals_frame, text="0.00", font=("Helvetica", 10))
-        self.total_gst_label.grid(row=1, column=1, sticky="w", padx=5)
+        self.total_gst_label.grid(row=3, column=1, sticky="w", padx=5)
 
-        ttk.Label(totals_frame, text="Grand Total (Incl. GST):", font=("Helvetica", 12, "bold")).grid(row=2, column=0, sticky="e", padx=5, pady=5)
+        ttk.Label(totals_frame, text="Grand Total (Incl. GST):", font=("Helvetica", 12, "bold")).grid(row=4, column=0, sticky="e", padx=5, pady=5)
         self.grand_total_label = ttk.Label(totals_frame, text="0.00", font=("Helvetica", 12, "bold"))
-        self.grand_total_label.grid(row=2, column=1, sticky="w", padx=5, pady=5)
+        self.grand_total_label.grid(row=4, column=1, sticky="w", padx=5, pady=5)
         
         # --- PDF/Print Action Bar ---
         action_bar = ttk.Frame(main_frame, padding=10)
         action_bar.grid(row=3, column=0, sticky="ew")
         
-        # Create a frame to push buttons to the right
         action_button_container = ttk.Frame(action_bar)
         action_button_container.pack(side=tk.RIGHT)
 
@@ -166,7 +187,7 @@ class InvoiceApp(tk.Tk):
         try:
             current_date = datetime.strptime(self.date_var.get(), '%d-%m-%Y')
             cal = Calendar(top, selectmode='day', date_pattern='dd-mm-y',
-                           year=current_date.year, month=current_date.month, day=current_date.day)
+                            year=current_date.year, month=current_date.month, day=current_date.day)
         except ValueError:
             cal = Calendar(top, selectmode='day', date_pattern='dd-mm-y')
 
@@ -185,8 +206,6 @@ class InvoiceApp(tk.Tk):
         popup_y = entry_y + entry_height + 5
         popup_x = entry_x
         
-        # If placing the calendar at the entry's x position would push it off-screen,
-        # adjust the x position to keep it within the screen bounds.
         if popup_x + top_width > self.winfo_screenwidth():
             popup_x = self.winfo_screenwidth() - top_width - 10
 
@@ -201,16 +220,19 @@ class InvoiceApp(tk.Tk):
         ]
         column_widths = [5, 35, 15, 15, 8, 8, 10, 8, 15, 15]
         
+        for widget in self.scrollable_frame.winfo_children():
+            if widget.grid_info().get('row') == 0:
+                widget.destroy()
+
         for i, header in enumerate(headers):
             label = ttk.Label(self.scrollable_frame, text=header, style="Header.TLabel", borderwidth=1, relief="solid", padding=5, anchor="center")
             label.grid(row=0, column=i, sticky="nsew")
-            self.scrollable_frame.grid_columnconfigure(i, weight=1, minsize=column_widths[i]*5) # Set column weights
+            self.scrollable_frame.grid_columnconfigure(i, weight=1, minsize=column_widths[i]*5) 
 
     def add_item_row(self):
         """Adds a new row of entry fields for an invoice item."""
         row_num = len(self.item_rows) + 1
         
-        # --- Create Variable Dictionary and Widgets for the new row ---
         row_vars = {
             'serial': tk.StringVar(value=str(row_num)),
             'product': tk.StringVar(),
@@ -224,7 +246,6 @@ class InvoiceApp(tk.Tk):
             'val_incl_gst': tk.StringVar(value='0.00')
         }
         
-        # Create Entry widgets
         entry_widgets = {
             'serial': ttk.Entry(self.scrollable_frame, textvariable=row_vars['serial'], state='readonly', justify='center'),
             'product': ttk.Entry(self.scrollable_frame, textvariable=row_vars['product']),
@@ -238,18 +259,17 @@ class InvoiceApp(tk.Tk):
             'val_incl_gst': ttk.Entry(self.scrollable_frame, textvariable=row_vars['val_incl_gst'], state='readonly', justify='right')
         }
         
-        # Place widgets in the grid
-        for i, key in enumerate(row_vars.keys()):
-            entry_widgets[key].grid(row=row_num, column=i, sticky="nsew", padx=1, pady=1)
+        item_keys_order = ['serial', 'product', 'packing', 'batch_no', 'qty', 'free', 'rate', 'gst', 'val_excl_gst', 'val_incl_gst']
+        
+        for i, key in enumerate(item_keys_order):
+            if key in entry_widgets:
+                entry_widgets[key].grid(row=row_num, column=i, sticky="nsew", padx=1, pady=1)
 
-        # --- Bind Triggers for Automatic Calculation ---
         for key in ['qty', 'rate', 'gst']:
-            # FIX: Simplified the callback to remove the confusing row_num parameter.
-            # The update_totals function will now recalculate everything, which is more robust.
             row_vars[key].trace_add("write", lambda *args: self.update_totals())
             
         self.item_rows.append({'vars': row_vars, 'widgets': entry_widgets})
-        self.update_totals() # Recalculate everything
+        self.update_totals()
 
     def remove_last_item_row(self):
         """Removes the last item row from the invoice."""
@@ -263,12 +283,11 @@ class InvoiceApp(tk.Tk):
             
     def update_totals(self):
         """
-        FIX: Rewritten for clarity and correctness.
-        This function now iterates through all items, recalculates the values for each row,
-        and then updates the grand totals. It is called whenever a relevant field is changed.
+        Calculates item values and applies a Global Discount before calculating final totals.
         """
-        grand_total_excl_gst = 0.0
-        grand_total_gst = 0.0
+        # --- 1. Calculate Subtotal (Pre-Discount) ---
+        subtotal_pre_discount = 0.0
+        total_gst_amount_sum = 0.0
         
         for row in self.item_rows:
             try:
@@ -276,48 +295,79 @@ class InvoiceApp(tk.Tk):
                 rate = float(row['vars']['rate'].get() or 0)
                 gst_percent = float(row['vars']['gst'].get() or 0)
 
-                # Calculate item values
-                val_excl_gst = qty * rate
-                gst_amount = val_excl_gst * (gst_percent / 100)
-                val_incl_gst = val_excl_gst + gst_amount
+                # Base Value (Excl. GST & Discount)
+                item_val_excl_gst = qty * rate
+                
+                # Item GST calculation 
+                item_gst_amount = item_val_excl_gst * (gst_percent / 100)
+                
+                item_val_incl_gst = item_val_excl_gst + item_gst_amount
 
                 # Update row variables (which updates the UI)
-                row['vars']['val_excl_gst'].set(f"{val_excl_gst:.2f}")
-                row['vars']['val_incl_gst'].set(f"{val_incl_gst:.2f}")
+                row['vars']['val_excl_gst'].set(f"{item_val_excl_gst:.2f}")
+                row['vars']['val_incl_gst'].set(f"{item_val_incl_gst:.2f}")
 
-                # Add to grand totals
-                grand_total_excl_gst += val_excl_gst
-                grand_total_gst += gst_amount
-
+                # Accumulate for Subtotal
+                subtotal_pre_discount += item_val_excl_gst
+                total_gst_amount_sum += item_gst_amount
+                
             except (ValueError, tk.TclError):
-                # When a value is invalid (e.g., empty or text), reset the calculated fields for that row.
-                # The grand total will be calculated correctly based on the other valid rows.
                 row['vars']['val_excl_gst'].set("0.00")
                 row['vars']['val_incl_gst'].set("0.00")
 
-        grand_total_incl_gst = grand_total_excl_gst + grand_total_gst
+        # --- 2. Apply Global Discount ---
+        try:
+            discount_percent = float(self.discount_percent_var.get() or 0)
+            if discount_percent < 0: discount_percent = 0
+        except ValueError:
+            discount_percent = 0.0
+            
+        # Calculate Discount Amount
+        discount_amount = subtotal_pre_discount * (discount_percent / 100)
         
-        # Update grand total labels
-        self.total_excl_gst_label.config(text=f"{grand_total_excl_gst:.2f}")
-        self.total_gst_label.config(text=f"{grand_total_gst:.2f}")
+        # Calculate Taxable Amount (Subtotal after Discount)
+        taxable_amount = subtotal_pre_discount - discount_amount
+        
+        # Recalculate GST based on the taxable amount using the effective average rate
+        if subtotal_pre_discount > 0:
+            effective_gst_rate = total_gst_amount_sum / subtotal_pre_discount
+        else:
+            effective_gst_rate = 0
+            
+        final_gst_amount = taxable_amount * effective_gst_rate
+        
+        # --- 3. Calculate Final Totals ---
+        grand_total_incl_gst = taxable_amount + final_gst_amount
+        
+        # --- 4. Update UI Labels ---
+        self.subtotal_label.config(text=f"{subtotal_pre_discount:.2f}") # Pre-discount subtotal
+        self.total_discount_label.config(text=f"{discount_amount:.2f}") # Discount amount
+        self.total_excl_gst_label.config(text=f"{taxable_amount:.2f}") # Taxable amount (After Discount)
+        self.total_gst_label.config(text=f"{final_gst_amount:.2f}")
         self.grand_total_label.config(text=f"{grand_total_incl_gst:.2f}")
         
     def _get_invoice_data(self):
         """Gathers all data from the UI fields and returns it in a structured dict."""
         invoice_data = {
             'doctor_name': self.doctor_name_entry.get(),
-            'date': self.date_var.get(), # Get date from the variable
+            'date': self.date_var.get(), 
             'items': [],
-            'total_excl_gst': self.total_excl_gst_label.cget("text"),
+            # Global Discount Data
+            'discount_percent': self.discount_percent_var.get() or '0', 
+            'subtotal': self.subtotal_label.cget("text"),
+            'total_discount': self.total_discount_label.cget("text"),
+            'taxable_amount': self.total_excl_gst_label.cget("text"), 
             'total_gst': self.total_gst_label.cget("text"),
             'grand_total': self.grand_total_label.cget("text")
         }
 
+        item_keys_for_pdf = ['serial', 'product', 'packing', 'batch_no', 'qty', 'free', 'rate', 'gst', 'val_excl_gst', 'val_incl_gst']
+
         for row in self.item_rows:
-            item = {k: v.get() for k, v in row['vars'].items()}
-            # Only add items with a product name
-            if item['product']:
-                invoice_data['items'].append(list(item.values()))
+            item_values = [row['vars'][key].get() for key in item_keys_for_pdf]
+            
+            if row['vars']['product'].get():
+                invoice_data['items'].append(item_values)
         
         return invoice_data
         
@@ -334,15 +384,12 @@ class InvoiceApp(tk.Tk):
 
         # --- Ask user for save location ---
         folder_path = filedialog.askdirectory(title="Select a folder to save the PDF")
-        if not folder_path: # User cancelled the dialog
+        if not folder_path:
             return
             
         safe_doctor_name = self.sanitize_filename(data['doctor_name'])
         filename = f"Invoice_{safe_doctor_name}_{data['date']}.pdf"
-        print(folder_path)
         full_path = os.path.join(folder_path, filename)
-        full_path = folder_path+'/'+filename
-        print(full_path)
         
         doc = SimpleDocTemplate(full_path, pagesize=letter)
         elements = []
@@ -352,17 +399,15 @@ class InvoiceApp(tk.Tk):
         elements.append(Paragraph("INVOICE", styles['h1']))
         elements.append(Spacer(1, 0.2 * inch))
         
-        # FIX: Create a table to position Doctor's Name on the left and Date on the top right.
         header_data = [
             [Paragraph(f"<b>Doctor's Name:</b> {data['doctor_name']}", styles['Normal']),
              Paragraph(f"<b>Date:</b> {data['date']}", styles['Normal'])]
         ]
         
-        # Usable width is around 6.5 inches (8.5 inch page - 1 inch margin on each side)
         header_table = Table(header_data, colWidths=[4.5 * inch, 2.5 * inch])
         header_table.setStyle(TableStyle([
             ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-            ('ALIGN', (1, 0), (1, 0), 'RIGHT') # Align the second column (date) to the right
+            ('ALIGN', (1, 0), (1, 0), 'RIGHT') 
         ]))
         elements.append(header_table)
         elements.append(Spacer(1, 0.3 * inch))
@@ -378,44 +423,66 @@ class InvoiceApp(tk.Tk):
         table_style = TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
             ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
             ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
             ('GRID', (0, 0), (-1, -1), 1, colors.black),
-            # Align numeric columns to the right
-            ('ALIGN', (4, 1), (-1, -1), 'RIGHT'),
+            
+            # Global alignment for all text in table to CENTER/MIDDLE
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            
+            # Override alignment for specific columns that should be RIGHT (numerical values)
+            ('ALIGN', (4, 1), (-1, -1), 'RIGHT'), 
             ('PADDING', (4,1), (-1, -1), 4)
         ])
         invoice_table.setStyle(table_style)
         elements.append(invoice_table)
         elements.append(Spacer(1, 0.3 * inch))
 
-        # --- PDF Totals Section ---
+        # --- PDF Totals Section with Discount (FIXED ALIGNMENT) ---
+        
+        discount_percent = float(data['discount_percent'])
+        discount_display = f"{discount_percent:.0f}%" if discount_percent > 0 else ""
+            
+        # REVISED: Use raw strings for non-bold items and Paragraphs only for bolding
+        # This ensures consistent cell content for TableStyle commands.
         totals_data = [
-            ["Total (Excl. GST):", Paragraph(data['total_excl_gst'], styles['Normal'])],
-            ["Total GST:", Paragraph(data['total_gst'], styles['Normal'])],
+            ["Subtotal (Pre-Discount):", data['subtotal']], 
+            # Use Paragraph for bolding the Discount row
+            [Paragraph(f"<b>Discount ({discount_display}):</b>", styles['BodyText']), Paragraph(f"<b>-{data['total_discount']}</b>", styles['BodyText'])],
+            ["Taxable Amount (Excl. GST):", data['taxable_amount']],
+            ["Total GST:", data['total_gst']],
+            # Use Paragraph for bolding the Grand Total row
             [Paragraph("<b>Grand Total:</b>", styles['BodyText']), Paragraph(f"<b>{data['grand_total']}</b>", styles['BodyText'])]
         ]
-        
-        totals_table = Table(totals_data, colWidths=[1.6*inch, 1*inch])
+
+        totals_table = Table(totals_data, colWidths=[2.2*inch, 1*inch])
         totals_table.setStyle(TableStyle([
+            # Enforce right alignment for ALL content in the first column (labels)
             ('ALIGN', (0, 0), (0, -1), 'RIGHT'),
-            ('ALIGN', (1, 0), (1, -1), 'RIGHT'),
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('FONTNAME', (0, 2), (1, 2), 'Helvetica-Bold'), 
+            # Enforce right alignment for ALL content in the second column (values)
+            ('ALIGN', (1, 0), (1, -1), 'RIGHT'), 
+            # Enforce MIDDLE vertical alignment for ALL content
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'), 
+            
+            # Apply BOLD font name specifically to Discount and Grand Total rows
+            ('FONTNAME', (0, 1), (1, 1), 'Helvetica-Bold'), # Discount Row (Row index 1)
+            ('FONTNAME', (0, 4), (1, 4), 'Helvetica-Bold'), # Grand Total Row (Row index 4)
+
             ('GRID', (0, 0), (-1, -1), 1, colors.black)
         ]))
 
         wrapper_table = Table([[totals_table]], colWidths=[7.4*inch])
-        wrapper_table.setStyle(TableStyle([('ALIGN', (0,0), (0,0), 'RIGHT')]))
+        wrapper_table.setStyle(TableStyle([
+            ('ALIGN', (0,0), (0,0), 'RIGHT')
+        ]))
 
         elements.append(wrapper_table)
         
         try:
             doc.build(elements)
-            self.last_pdf_path = full_path # Store the path of the successfully generated PDF
+            self.last_pdf_path = full_path
             messagebox.showinfo("Success", f"PDF '{filename}' generated successfully in\n{folder_path}")
         except PermissionError:
             messagebox.showerror("Error", f"Could not save PDF. Please close '{filename}' if it's open in another program and try again.")
@@ -424,14 +491,12 @@ class InvoiceApp(tk.Tk):
 
     def print_invoice(self):
         """Sends the last generated PDF to the default printer."""
-        print("printing start")
         if not self.last_pdf_path or not os.path.exists(self.last_pdf_path):
             messagebox.showerror("Error", "No PDF found. Please generate the PDF first before printing.")
             return
             
         try:
             if sys.platform == "win32":
-                print(self.last_pdf_path)
                 os.startfile(self.last_pdf_path, "print")
             elif sys.platform == "darwin": # macOS
                 os.system(f"lpr {self.last_pdf_path}")
@@ -441,22 +506,15 @@ class InvoiceApp(tk.Tk):
         except Exception as e:
             messagebox.showerror("Printing Error", f"Could not print the file. Please check your printer setup.\nError: {e}")
             
-    # Add this method inside the InvoiceApp class
     def sanitize_filename(self, name):
         """Removes characters that are illegal in filenames."""
-        # Characters that are invalid in Windows filenames
         invalid_chars = '<>:"/\\|?*'
-        # Replace spaces with underscores first
         safe_name = name.replace(' ', '_')
-        # Remove any remaining invalid characters
         for char in invalid_chars:
-            safe_name = safe_name.replace(char, '')        
-            return safe_name
+            safe_name = safe_name.replace(char, '')         
+        return safe_name
     
-
-
 
 if __name__ == "__main__":
     app = InvoiceApp()
     app.mainloop()
-
