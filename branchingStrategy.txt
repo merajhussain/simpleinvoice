@@ -1,0 +1,49 @@
+================================================================================
+GIT STRATEGY NOTES (v2.0 Onwards)
+================================================================================
+
+This document outlines the standard procedure for development, branching, and tagging new official releases of the Invoice Generator application.
+
+--------------------------------------------------------------------------------
+1. NAMING CONVENTION
+--------------------------------------------------------------------------------
+
+All official release branches will follow the prefix 'hinvv' followed immediately by the single version number.
+
+| Release Version | Branch Name | Tag Name | Purpose |
+|:---:|:---:|:---:|:---|
+| v2.0 | hinvv2 | v2.0 | Current release development and finalization. |
+| v3.0 | hinvv3 | v3.0 | Future development for the next major release. |
+
+--------------------------------------------------------------------------------
+2. TAGGING POLICY
+--------------------------------------------------------------------------------
+
+* Tags will be created **immediately after merging** the corresponding release branch into 'main'.
+* Tags must use the standard format: **vX.Y** (e.g., v2.0).
+* Tags must be pushed to the remote repository.
+
+--------------------------------------------------------------------------------
+3. RELEASE BRANCHING WORKFLOW
+--------------------------------------------------------------------------------
+
+We follow a **Release Branching Model** to ensure the 'main' branch always represents a stable, production-ready version.
+
+| Step | Action | Command |
+|:---:|:--- |:--- |
+| **1. Development** | Create the release branch ('hinvvX') from 'main' and complete all new features/fixes (e.g., implement discount). | `git checkout -b hinvv2 main` |
+| **2. Final Commit** | Commit all final changes (including updated README.md and release notes). | `git commit -m "feat(v2.0): Finalized features."` |
+| **3. Merge to Main** | Switch to 'main' and merge the release branch. **Use --no-ff to create a dedicated merge commit.** | `git checkout main` |
+| | | `git merge --no-ff hinvv2 -m "Merge branch 'hinvv2' for v2.0 release."` |
+| **4. Tagging** | Tag the current commit (the merge commit). | `git tag v2.0` |
+| **5. Push** | Push the updated 'main' branch AND the new tag. | `git push origin main` |
+| | | `git push origin v2.0` |
+| **6. Cleanup** | Delete the local and remote release branch. | `git branch -d hinvv2` |
+| | | `git push origin --delete hinvv2` |
+
+--------------------------------------------------------------------------------
+4. DOCUMENTATION STRATEGY
+--------------------------------------------------------------------------------
+
+* **README.md (Root):** Must be updated with a summary of the **latest version's** features (e.g., v2.0).
+* **Release Notes:** Detailed release notes (e.g., v2.0/RELEASE_NOTES.md) should be created for each version and stored in a versioned folder.
