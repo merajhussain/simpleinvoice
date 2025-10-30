@@ -5,20 +5,18 @@ import os
 import sys
 
 # --- Environment Diagnosis ---
-# This will help debug installation issues with reportlab.
 print("--- Python Environment ---")
 print(f"Executable: {sys.executable}")
 print(f"Version: {sys.version}")
 print("--------------------------")
 
-# Attempt to import required libraries. If any fail, prompt the user to install them.
+# Attempt to import required libraries.
 try:
     from reportlab.lib.pagesizes import letter
     from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
     from reportlab.lib import colors
     from reportlab.lib.styles import getSampleStyleSheet
     from reportlab.lib.units import inch
-    # Import the Calendar widget instead of DateEntry
     from tkcalendar import Calendar
 except ImportError as e:
     missing_library = str(e).split("'")[1]
@@ -31,17 +29,16 @@ except ImportError as e:
 class InvoiceApp(tk.Tk):
     """
     A desktop application for creating and managing simple invoices.
-    Allows adding items, calculating totals with GST, generating a PDF,
-    and printing the invoice.
+    Version 2.0 includes global discount functionality, PDF alignment fixes,
+    and timestamped PDF generation.
     """
     def __init__(self):
         super().__init__()
         self.title("Simple Invoice Generator")
         self.geometry("1200x750")
-        self.minsize(950, 600) # Set a minimum size for the window
+        self.minsize(950, 600)
         self.configure(bg="#f0f0f0")
 
-        # Style configuration for ttk widgets
         style = ttk.Style(self)
         style.theme_use('clam')
         style.configure("TLabel", background="#f0f0f0", font=("Helvetica", 10))
@@ -50,13 +47,12 @@ class InvoiceApp(tk.Tk):
         style.configure("Header.TLabel", font=("Helvetica", 12, "bold"))
         
         self.item_rows = []
-        self.last_pdf_path = None # To store the path of the last generated PDF
-        self.discount_percent_var = tk.StringVar(value='0') # Global Discount Variable
+        self.last_pdf_path = None
+        self.discount_percent_var = tk.StringVar(value='0')
         
         self._create_widgets()
-        self.add_item_row() # Start with one empty item row
+        self.add_item_row()
         
-        # NEW BINDING: Trigger recalculation when global discount changes
         self.discount_percent_var.trace_add("write", lambda *args: self.update_totals())
 
     def _create_widgets(self):
@@ -141,12 +137,10 @@ class InvoiceApp(tk.Tk):
         self.subtotal_label = ttk.Label(totals_frame, text="0.00", font=("Helvetica", 10))
         self.subtotal_label.grid(row=0, column=1, sticky="w", padx=5)
         
-        # Discount Label
         ttk.Label(totals_frame, text="Discount Amount:", font=("Helvetica", 10, "bold")).grid(row=1, column=0, sticky="e", padx=5)
         self.total_discount_label = ttk.Label(totals_frame, text="0.00", font=("Helvetica", 10))
         self.total_discount_label.grid(row=1, column=1, sticky="w", padx=5)
         
-        # Taxable Amount
         ttk.Label(totals_frame, text="Taxable Amount:", font=("Helvetica", 10, "bold")).grid(row=2, column=0, sticky="e", padx=5)
         self.total_excl_gst_label = ttk.Label(totals_frame, text="0.00", font=("Helvetica", 10))
         self.total_excl_gst_label.grid(row=2, column=1, sticky="w", padx=5)
@@ -182,7 +176,7 @@ class InvoiceApp(tk.Tk):
 
         top = tk.Toplevel(self)
         top.title("Select Date")
-        top.grab_set()  # Make the window modal
+        top.grab_set()
 
         try:
             current_date = datetime.strptime(self.date_var.get(), '%d-%m-%Y')
@@ -194,7 +188,6 @@ class InvoiceApp(tk.Tk):
         cal.pack(pady=10, padx=10)
         ttk.Button(top, text="OK", command=set_date).pack(pady=5)
 
-        # --- Intelligent Positioning Logic ---
         self.update_idletasks()
         
         entry_x = self.date_entry.winfo_rootx()
@@ -340,9 +333,9 @@ class InvoiceApp(tk.Tk):
         grand_total_incl_gst = taxable_amount + final_gst_amount
         
         # --- 4. Update UI Labels ---
-        self.subtotal_label.config(text=f"{subtotal_pre_discount:.2f}") # Pre-discount subtotal
-        self.total_discount_label.config(text=f"{discount_amount:.2f}") # Discount amount
-        self.total_excl_gst_label.config(text=f"{taxable_amount:.2f}") # Taxable amount (After Discount)
+        self.subtotal_label.config(text=f"{subtotal_pre_discount:.2f}")
+        self.total_discount_label.config(text=f"{discount_amount:.2f}")
+        self.total_excl_gst_label.config(text=f"{taxable_amount:.2f}")
         self.total_gst_label.config(text=f"{final_gst_amount:.2f}")
         self.grand_total_label.config(text=f"{grand_total_incl_gst:.2f}")
         
@@ -352,7 +345,6 @@ class InvoiceApp(tk.Tk):
             'doctor_name': self.doctor_name_entry.get(),
             'date': self.date_var.get(), 
             'items': [],
-            # Global Discount Data
             'discount_percent': self.discount_percent_var.get() or '0', 
             'subtotal': self.subtotal_label.cget("text"),
             'total_discount': self.total_discount_label.cget("text"),
@@ -372,7 +364,7 @@ class InvoiceApp(tk.Tk):
         return invoice_data
         
     def generate_pdf(self):
-        """Generates a PDF file from the current invoice data."""
+        """Generates a PDF file from the current invoice data, including a timestamp."""
         data = self._get_invoice_data()
         
         if not data['doctor_name']:
@@ -387,8 +379,14 @@ class InvoiceApp(tk.Tk):
         if not folder_path:
             return
             
+        # --- FIX: Generate a unique timestamp (HHMMSS) ---
+        current_time_str = datetime.now().strftime('%H%M%S')
+            
         safe_doctor_name = self.sanitize_filename(data['doctor_name'])
-        filename = f"Invoice_{safe_doctor_name}_{data['date']}.pdf"
+        
+        # --- NEW FILENAME FORMAT: Invoice_Name_Date_Time.pdf ---
+        filename = f"Invoice_{safe_doctor_name}_{data['date']}_{current_time_str}.pdf"
+        
         full_path = os.path.join(folder_path, filename)
         
         doc = SimpleDocTemplate(full_path, pagesize=letter)
@@ -428,11 +426,9 @@ class InvoiceApp(tk.Tk):
             ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
             ('GRID', (0, 0), (-1, -1), 1, colors.black),
             
-            # Global alignment for all text in table to CENTER/MIDDLE
             ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
             
-            # Override alignment for specific columns that should be RIGHT (numerical values)
             ('ALIGN', (4, 1), (-1, -1), 'RIGHT'), 
             ('PADDING', (4,1), (-1, -1), 4)
         ])
@@ -440,35 +436,30 @@ class InvoiceApp(tk.Tk):
         elements.append(invoice_table)
         elements.append(Spacer(1, 0.3 * inch))
 
-        # --- PDF Totals Section with Discount (FIXED ALIGNMENT) ---
-        
+        # --- PDF Totals Section with Discount (FINAL ALIGNMENT FIX) ---
         discount_percent = float(data['discount_percent'])
         discount_display = f"{discount_percent:.0f}%" if discount_percent > 0 else ""
             
-        # REVISED: Use raw strings for non-bold items and Paragraphs only for bolding
-        # This ensures consistent cell content for TableStyle commands.
+        # FIX: Pass raw strings for values, and rely on TableStyle for bolding and alignment.
+        # This ensures all values are treated consistently by reportlab's cell rendering engine.
         totals_data = [
             ["Subtotal (Pre-Discount):", data['subtotal']], 
-            # Use Paragraph for bolding the Discount row
-            [Paragraph(f"<b>Discount ({discount_display}):</b>", styles['BodyText']), Paragraph(f"<b>-{data['total_discount']}</b>", styles['BodyText'])],
+            # Labels use Paragraph for bolding, values are now raw strings
+            [Paragraph(f"<b>Discount ({discount_display}):</b>", styles['BodyText']), f"-{data['total_discount']}"],
             ["Taxable Amount (Excl. GST):", data['taxable_amount']],
             ["Total GST:", data['total_gst']],
-            # Use Paragraph for bolding the Grand Total row
-            [Paragraph("<b>Grand Total:</b>", styles['BodyText']), Paragraph(f"<b>{data['grand_total']}</b>", styles['BodyText'])]
+            [Paragraph("<b>Grand Total:</b>", styles['BodyText']), data['grand_total']]
         ]
 
         totals_table = Table(totals_data, colWidths=[2.2*inch, 1*inch])
         totals_table.setStyle(TableStyle([
-            # Enforce right alignment for ALL content in the first column (labels)
             ('ALIGN', (0, 0), (0, -1), 'RIGHT'),
-            # Enforce right alignment for ALL content in the second column (values)
             ('ALIGN', (1, 0), (1, -1), 'RIGHT'), 
-            # Enforce MIDDLE vertical alignment for ALL content
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'), 
             
-            # Apply BOLD font name specifically to Discount and Grand Total rows
-            ('FONTNAME', (0, 1), (1, 1), 'Helvetica-Bold'), # Discount Row (Row index 1)
-            ('FONTNAME', (0, 4), (1, 4), 'Helvetica-Bold'), # Grand Total Row (Row index 4)
+            # Use FONTNAME for bolding on specific rows (1 and 4)
+            ('FONTNAME', (0, 1), (1, 1), 'Helvetica-Bold'), 
+            ('FONTNAME', (0, 4), (1, 4), 'Helvetica-Bold'), 
 
             ('GRID', (0, 0), (-1, -1), 1, colors.black)
         ]))
@@ -498,9 +489,9 @@ class InvoiceApp(tk.Tk):
         try:
             if sys.platform == "win32":
                 os.startfile(self.last_pdf_path, "print")
-            elif sys.platform == "darwin": # macOS
+            elif sys.platform == "darwin": 
                 os.system(f"lpr {self.last_pdf_path}")
-            else: # Linux
+            else: 
                 os.system(f"lp {self.last_pdf_path}")
             messagebox.showinfo("Printing", f"Sent '{os.path.basename(self.last_pdf_path)}' to the default printer.")
         except Exception as e:
