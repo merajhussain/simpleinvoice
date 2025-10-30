@@ -379,12 +379,12 @@ class InvoiceApp(tk.Tk):
         if not folder_path:
             return
             
-        # --- FIX: Generate a unique timestamp (HHMMSS) ---
+        # --- Generate a unique timestamp (HHMMSS) ---
         current_time_str = datetime.now().strftime('%H%M%S')
             
         safe_doctor_name = self.sanitize_filename(data['doctor_name'])
         
-        # --- NEW FILENAME FORMAT: Invoice_Name_Date_Time.pdf ---
+        # --- FILENAME FORMAT: Invoice_Name_Date_Time.pdf ---
         filename = f"Invoice_{safe_doctor_name}_{data['date']}_{current_time_str}.pdf"
         
         full_path = os.path.join(folder_path, filename)
@@ -436,33 +436,64 @@ class InvoiceApp(tk.Tk):
         elements.append(invoice_table)
         elements.append(Spacer(1, 0.3 * inch))
 
-        # --- PDF Totals Section with Discount (FINAL ALIGNMENT FIX) ---
+        # --- PDF Totals Section with Conditional Discount Display ---
+        
+        # Row data collection
+        totals_data = []
+        
+        # 1. Subtotal (Row index 0)
+        totals_data.append(["Subtotal (Pre-Discount):", data['subtotal']])
+        
+        # 2. Discount Row (Conditional)
+        discount_amount = float(data['total_discount'])
         discount_percent = float(data['discount_percent'])
-        discount_display = f"{discount_percent:.0f}%" if discount_percent > 0 else ""
-            
-        # FIX: Pass raw strings for values, and rely on TableStyle for bolding and alignment.
-        # This ensures all values are treated consistently by reportlab's cell rendering engine.
-        totals_data = [
-            ["Subtotal (Pre-Discount):", data['subtotal']], 
-            # Labels use Paragraph for bolding, values are now raw strings
-            [Paragraph(f"<b>Discount ({discount_display}):</b>", styles['BodyText']), f"-{data['total_discount']}"],
-            ["Taxable Amount (Excl. GST):", data['taxable_amount']],
-            ["Total GST:", data['total_gst']],
-            [Paragraph("<b>Grand Total:</b>", styles['BodyText']), data['grand_total']]
-        ]
+        
+        if discount_amount > 0:
+            discount_display = f"{discount_percent:.0f}%" if discount_percent > 0 else ""
+            totals_data.append([
+                Paragraph(f"<b>Discount ({discount_display}):</b>", styles['BodyText']), 
+                f"-{data['total_discount']}"
+            ])
+            # Row index for taxable amount shifts from 1 to 2
+            taxable_amount_row_index = 2
+            grand_total_row_index = 4
+        else:
+            # Row index for taxable amount remains 1
+            taxable_amount_row_index = 1
+            grand_total_row_index = 3
 
+        # 3. Taxable Amount (Excl. GST)
+        totals_data.append(["Taxable Amount (Excl. GST):", data['taxable_amount']])
+
+        # 4. Total GST
+        totals_data.append(["Total GST:", data['total_gst']])
+        
+        # 5. Grand Total
+        totals_data.append([Paragraph("<b>Grand Total:</b>", styles['BodyText']), data['grand_total']])
+
+
+        # --- Totals Table Styling ---
         totals_table = Table(totals_data, colWidths=[2.2*inch, 1*inch])
-        totals_table.setStyle(TableStyle([
+        
+        # Define styles dynamically based on whether the discount row was included
+        table_style_list = [
             ('ALIGN', (0, 0), (0, -1), 'RIGHT'),
             ('ALIGN', (1, 0), (1, -1), 'RIGHT'), 
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'), 
-            
-            # Use FONTNAME for bolding on specific rows (1 and 4)
-            ('FONTNAME', (0, 1), (1, 1), 'Helvetica-Bold'), 
-            ('FONTNAME', (0, 4), (1, 4), 'Helvetica-Bold'), 
-
             ('GRID', (0, 0), (-1, -1), 1, colors.black)
-        ]))
+        ]
+
+        if discount_amount > 0:
+            # If discount is included (Row index 1), make it bold
+            table_style_list.append(('FONTNAME', (0, 1), (1, 1), 'Helvetica-Bold'))
+            # Grand Total (last row) is always bold
+            table_style_list.append(('FONTNAME', (0, 4), (1, 4), 'Helvetica-Bold'))
+        else:
+            # If discount is NOT included, Grand Total is at Row index 3
+            table_style_list.append(('FONTNAME', (0, 3), (1, 3), 'Helvetica-Bold'))
+
+        totals_table.setStyle(TableStyle(table_style_list))
+
 
         wrapper_table = Table([[totals_table]], colWidths=[7.4*inch])
         wrapper_table.setStyle(TableStyle([
